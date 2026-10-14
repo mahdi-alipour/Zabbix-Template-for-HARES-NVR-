@@ -1,0 +1,1441 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: '09cf650fb3534ced8e6616f5a89a297a'
+      name: 'Templates/Network devices'
+  templates:
+    - uuid: '7adaad0801d44779b25e693c384b8055'
+      template: 'HARES NVR-A64RH-16D by SNMP'
+      name: 'HARES NVR-A64RH-16D by SNMP'
+      description: |
+        Template for HARES NVR-A64RH-16D (Enterprise OID 1.3.6.1.4.1.25506). The NVR exposes a minimal SNMP agent: all data is
+        text strings under 1.3.6.1.4.1.25506.20.x.0, parsed here with REGEX / JavaScript preprocessing (dependent items).
+
+        Verified against a real walk of the device:
+         - Uptime counts in 10 ms units (macro {$HARES.UPTIME.MULTIPLIER}=0.01).
+         - Disk capacity values are MB although labelled (KB) (macro {$HARES.DISK.UNIT.MULTIPLIER}=1048576).
+         - The RAID volume is reported as ONE logical disk (DiskID 1); physical disks / RAID level are not exposed over SNMP.
+         - Disk status code 3 was observed on a healthy volume. Other codes are undocumented: a trigger alerts on every change.
+         - Memory: vendor MemUtilization is a fraction (0.34 = 34%), so utilization is calculated from MemTotal/MemFree.
+         - IF-MIB, sysUpTime and HOST-RESOURCES-MIB are NOT implemented: interface discovery is disabled by default.
+         - HTTPS / Telnet / ONVIF are probed from the Zabbix side (port connect / SOAP request) and compared with *.EXPECTED macros. IP filtering, 802.1x and ARP protection are NOT observable externally.
+         - Cameras (IPC.NO / IPC.Status) and channels (CHLID / bit rate) are discovered automatically.
+      groups:
+        - name: 'Templates/Network devices'
+      items:
+        - uuid: 'd7ca9f19b26a40c7bbe2387b8ebf5ea6'
+          name: 'SNMP agent availability'
+          type: INTERNAL
+          key: 'zabbix[host,snmp,available]'
+          history: 7d
+          valuemap:
+            name: zabbix.host.available
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+        - uuid: '4364d008adb84089b5b5ee8c743f4880'
+          name: 'ICMP ping'
+          type: SIMPLE
+          key: icmpping
+          history: 7d
+          valuemap:
+            name: 'Service state'
+          tags:
+            - tag: component
+              value: network
+        - uuid: '876359066f0140b48cc4d2081550e233'
+          name: 'ICMP loss'
+          type: SIMPLE
+          key: icmppingloss
+          history: 7d
+          value_type: FLOAT
+          units: '%'
+          tags:
+            - tag: component
+              value: network
+        - uuid: 'f11da8ba5f4c403fa473a70038a57d4e'
+          name: 'ICMP response time'
+          type: SIMPLE
+          key: icmppingsec
+          history: 7d
+          value_type: FLOAT
+          units: s
+          tags:
+            - tag: component
+              value: network
+        - uuid: 'e50bbe4fe9764feba0e96ce231f6e4cd'
+          name: 'Web service (HTTP) port state'
+          type: SIMPLE
+          key: 'net.tcp.service[tcp,,{$HARES.WEB.PORT}]'
+          history: 7d
+          valuemap:
+            name: 'Service state'
+          tags:
+            - tag: component
+              value: application
+            - tag: application
+              value: web
+        - uuid: '0050507c91744936a1f8fc81a09ea2c8'
+          name: 'Web service (HTTP protocol check, informational)'
+          type: SIMPLE
+          key: 'net.tcp.service[http,,{$HARES.WEB.PORT}]'
+          history: 7d
+          valuemap:
+            name: 'Service state'
+          description: 'Application-level HTTP check. Many NVR web servers answer it non-standardly and report 0 although the UI works, so no trigger is attached.'
+          tags:
+            - tag: component
+              value: application
+            - tag: application
+              value: web
+        - uuid: '5c6713994f754de89fe21de07fae6798'
+          name: 'Web service (HTTP) response time'
+          type: SIMPLE
+          key: 'net.tcp.service.perf[tcp,,{$HARES.WEB.PORT}]'
+          history: 7d
+          value_type: FLOAT
+          units: s
+          tags:
+            - tag: component
+              value: application
+            - tag: application
+              value: web
+        - uuid: '7e4fc3b6923645fd96f2e9991f002e54'
+          name: 'Web service (HTTPS) port state'
+          type: SIMPLE
+          key: 'net.tcp.service[tcp,,{$HARES.HTTPS.PORT}]'
+          history: 7d
+          valuemap:
+            name: 'Service state'
+          description: 'TCP connect to the HTTPS port. Whether this is good or bad is decided by macro {$HARES.HTTPS.EXPECTED}.'
+          tags:
+            - tag: component
+              value: application
+            - tag: application
+              value: web
+        - uuid: '6dd12620a88440188fc2b14685cb90d1'
+          name: 'RTSP service state'
+          type: SIMPLE
+          key: 'net.tcp.service[tcp,,{$HARES.RTSP.PORT}]'
+          history: 7d
+          valuemap:
+            name: 'Service state'
+          tags:
+            - tag: component
+              value: application
+            - tag: application
+              value: rtsp
+        - uuid: 'b4dd556c516d455c8720fe254d12c23e'
+          name: 'Device info: raw'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.25506.20.1.0
+          key: hares.info.raw
+          delay: 1h
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: system
+        - uuid: '21e39d26b77f492db73f680e1194419a'
+          name: 'Device name'
+          type: DEPENDENT
+          key: hares.dev.name
+          delay: '0'
+          history: 30d
+          trends: '0'
+          value_type: CHAR
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'DevName:\s+(\S+)'
+                - \1
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: hares.info.raw
+          tags:
+            - tag: component
+              value: system
+        - uuid: 'ed283075ab3a40d0aee2306dcdb88414'
+          name: 'Device model'
+          type: DEPENDENT
+          key: hares.dev.model
+          delay: '0'
+          history: 30d
+          trends: '0'
+          value_type: CHAR
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'DevModel:\s+(\S+)'
+                - \1
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: hares.info.raw
+          tags:
+            - tag: component
+              value: system
+        - uuid: '27f8ff4f7d6749f0950b16c8497abd90'
+          name: 'Firmware version'
+          type: DEPENDENT
+          key: hares.dev.firmware
+          delay: '0'
+          history: 30d
+          trends: '0'
+          value_type: CHAR
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'SoftwareVersion:\s+(\S+)'
+                - \1
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: hares.info.raw
+          tags:
+            - tag: component
+              value: system
+        - uuid: '5ce0171766b94e1f84550c15d3b7ec1f'
+          name: 'Serial number'
+          type: DEPENDENT
+          key: hares.dev.serial
+          delay: '0'
+          history: 30d
+          trends: '0'
+          value_type: CHAR
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'DevSeqNumber:\s+(\S+)'
+                - \1
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: hares.info.raw
+          tags:
+            - tag: component
+              value: system
+        - uuid: 'e8cefc7c09914dacabef73f36917437b'
+          name: 'Manufacturer (OEM)'
+          type: DEPENDENT
+          key: hares.dev.manufacture
+          delay: '0'
+          history: 30d
+          trends: '0'
+          value_type: CHAR
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'Manufacture:\s+(\S+)'
+                - \1
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: hares.info.raw
+          tags:
+            - tag: component
+              value: system
+        - uuid: '63d2d51b2cb34cd3bb9bcc0629cb9148'
+          name: 'Uptime: raw'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.25506.20.6.0
+          key: hares.uptime.raw
+          delay: 1m
+          history: 1h
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: system
+        - uuid: 'ae7720102aa843769fc1a83bcd6aebc3'
+          name: 'Uptime'
+          type: DEPENDENT
+          key: hares.uptime
+          delay: '0'
+          history: 31d
+          value_type: FLOAT
+          units: uptime
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'System Operation Time:\s*(\d+)'
+                - \1
+            - type: MULTIPLIER
+              parameters:
+                - '{$HARES.UPTIME.MULTIPLIER}'
+          master_item:
+            key: hares.uptime.raw
+          tags:
+            - tag: component
+              value: system
+        - uuid: '44855f29d85944c9907595b1dfffc098'
+          name: 'CPU: raw'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.25506.20.8.0
+          key: hares.cpu.raw
+          delay: 1m
+          history: 1h
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: '6aa73caff061461aae37fcb39636878f'
+          name: 'CPU utilization'
+          type: DEPENDENT
+          key: hares.cpu.util
+          delay: '0'
+          history: 31d
+          value_type: FLOAT
+          units: '%'
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'CPU:\s*(-?[\d.]+)\s*%'
+                - \1
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var v = parseFloat(value);
+                  if (isNaN(v) || v <= 0) { return 0; }
+                  return v;
+          master_item:
+            key: hares.cpu.raw
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: '20a71061617c48dbbe1718e3d76f0be6'
+          name: 'Memory: raw'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.25506.20.7.0
+          key: hares.mem.raw
+          delay: 1m
+          history: 1h
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: memory
+        - uuid: '3c9362f3a86f490c83733447969abba4'
+          name: 'Memory total'
+          type: DEPENDENT
+          key: hares.mem.total
+          delay: '0'
+          history: 31d
+          units: B
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'MemTotal:\s*(\d+)'
+                - \1
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          master_item:
+            key: hares.mem.raw
+          tags:
+            - tag: component
+              value: memory
+        - uuid: '0138bd3f4bea4590a8df237aea9d8e79'
+          name: 'Memory free'
+          type: DEPENDENT
+          key: hares.mem.free
+          delay: '0'
+          history: 31d
+          units: B
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'MemFree:\s*(\d+)'
+                - \1
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          master_item:
+            key: hares.mem.raw
+          tags:
+            - tag: component
+              value: memory
+        - uuid: '65f3cc43324b4887aca3f9ceed9e0216'
+          name: 'Memory utilization'
+          type: CALCULATED
+          key: hares.mem.util
+          delay: 1m
+          history: 31d
+          value_type: FLOAT
+          units: '%'
+          params: '(last(//hares.mem.total)-last(//hares.mem.free))/last(//hares.mem.total)*100'
+          description: 'Calculated from MemTotal and MemFree.'
+          tags:
+            - tag: component
+              value: memory
+        - uuid: '5e50d1d7e34f42618211e8e8b1c39504'
+          name: 'Disk general: raw'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.25506.20.2.0
+          key: hares.disk.general.raw
+          delay: 5m
+          history: 1d
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: storage
+        - uuid: 'eac3d30ffff64bc19a6adabe007613ca'
+          name: 'Disks: number of HDD'
+          type: DEPENDENT
+          key: hares.disk.count
+          delay: '0'
+          history: 31d
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'DiskTotalNum:\s*(\d+)'
+                - \1
+          master_item:
+            key: hares.disk.general.raw
+          tags:
+            - tag: component
+              value: storage
+        - uuid: '1f9bf731866e41b5beac705314fb9718'
+          name: 'Disks: total capacity'
+          type: DEPENDENT
+          key: hares.disk.total
+          delay: '0'
+          history: 31d
+          units: B
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'DiskTotalCapacity:\s*(\d+)'
+                - \1
+            - type: MULTIPLIER
+              parameters:
+                - '{$HARES.DISK.UNIT.MULTIPLIER}'
+          master_item:
+            key: hares.disk.general.raw
+          tags:
+            - tag: component
+              value: storage
+        - uuid: '38fbe7ebe7d948b6b2aa8e13d3e4df8e'
+          name: 'Disks: free capacity'
+          type: DEPENDENT
+          key: hares.disk.free
+          delay: '0'
+          history: 31d
+          units: B
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'DiskRemainCapacity:\s*(\d+)'
+                - \1
+            - type: MULTIPLIER
+              parameters:
+                - '{$HARES.DISK.UNIT.MULTIPLIER}'
+          master_item:
+            key: hares.disk.general.raw
+          tags:
+            - tag: component
+              value: storage
+        - uuid: 'aff4a50d5dc3440e8e34b0a8369c17f8'
+          name: 'Disks: used capacity'
+          type: CALCULATED
+          key: hares.disk.used
+          delay: 5m
+          history: 31d
+          units: B
+          params: 'last(//hares.disk.total)-last(//hares.disk.free)'
+          tags:
+            - tag: component
+              value: storage
+        - uuid: '2203a961c07e406495e188fdf7b2f6cf'
+          name: 'Disks: used space, in %'
+          type: CALCULATED
+          key: hares.disk.pused
+          delay: 5m
+          history: 31d
+          value_type: FLOAT
+          units: '%'
+          params: '(last(//hares.disk.total)-last(//hares.disk.free))/last(//hares.disk.total)*100'
+          tags:
+            - tag: component
+              value: storage
+        - uuid: 'da31ba89789e4e5c974a22f91f462186'
+          name: 'Disk individual: raw'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.25506.20.3.0
+          key: hares.disk.individual.raw
+          delay: 5m
+          history: 1d
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: storage
+        - uuid: '958de4587d4444b692d6189d60872116'
+          name: 'IPC (cameras) info: raw'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.25506.20.4.0
+          key: hares.ipc.raw
+          delay: 1m
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: camera
+        - uuid: '491e12cdc3ee43e2b83581e1227fd9ba'
+          name: 'IPC (cameras) info: length'
+          type: DEPENDENT
+          key: hares.ipc.length
+          delay: '0'
+          history: 31d
+          description: 'Number of characters of the IPC info payload (without the "IPC Information:" prefix). 0 = no camera information reported.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var s = (value || '').replace(/^\s*IPC Information:\s*/i, '');
+                  return s.trim().length;
+          master_item:
+            key: hares.ipc.raw
+          tags:
+            - tag: component
+              value: camera
+        - uuid: '3fb77cbb31ea4a53beabe54f1fac400d'
+          name: 'IPC (cameras): configured count'
+          type: DEPENDENT
+          key: hares.ipc.total
+          delay: '0'
+          history: 31d
+          description: 'Number of IPC.NO entries reported by the NVR.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var m = (value || '').match(/IPC\.NO:/g);
+                  return m ? m.length : 0;
+          master_item:
+            key: hares.ipc.raw
+          tags:
+            - tag: component
+              value: camera
+        - uuid: '0744a836559e40e7b3785820acb74c42'
+          name: 'IPC (cameras): online count'
+          type: DEPENDENT
+          key: hares.ipc.online.count
+          delay: '0'
+          history: 31d
+          description: 'Cameras whose IPC.Status equals {$HARES.IPC.STATUS.OK}.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var s = value || '';
+                  var re = /IPC\.Status:\s*(\S+)/g, m, n = 0;
+                  var ok = '{$HARES.IPC.STATUS.OK}'.toUpperCase();
+                  while ((m = re.exec(s)) !== null) { if (m[1].toUpperCase() === ok) { n++; } }
+                  return n;
+          master_item:
+            key: hares.ipc.raw
+          tags:
+            - tag: component
+              value: camera
+        - uuid: '95205439682f4a2b8b983e2197011383'
+          name: 'IPC (cameras): offline count'
+          type: DEPENDENT
+          key: hares.ipc.offline.count
+          delay: '0'
+          history: 31d
+          description: 'Cameras whose IPC.Status differs from {$HARES.IPC.STATUS.OK}.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var s = value || '';
+                  var re = /IPC\.Status:\s*(\S+)/g, m, n = 0;
+                  var ok = '{$HARES.IPC.STATUS.OK}'.toUpperCase();
+                  while ((m = re.exec(s)) !== null) { if (m[1].toUpperCase() !== ok) { n++; } }
+                  return n;
+          master_item:
+            key: hares.ipc.raw
+          tags:
+            - tag: component
+              value: camera
+        - uuid: '89fd796444f3491e8f472c21de7b2c55'
+          name: 'Channel encoding info: raw'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.25506.20.5.0
+          key: hares.channel.raw
+          delay: 5m
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: camera
+        - uuid: '28235657b3ae4f798e9ae935ceec3373'
+          name: 'Channel encoding: total configured bitrate'
+          type: DEPENDENT
+          key: hares.channel.bitrate.total
+          delay: '0'
+          history: 31d
+          units: bps
+          description: 'Sum of the configured encode bit rates of all channels (not measured traffic). Useful for storage planning.'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var re = /Bit Rate:\s*(\d+)/g, m, t = 0;
+                  while ((m = re.exec(value || '')) !== null) { t += parseInt(m[1], 10); }
+                  return t * 1000;
+          master_item:
+            key: hares.channel.raw
+          tags:
+            - tag: component
+              value: camera
+        - uuid: '1a6a4a2d458f451181c9af562d934dcc'
+          name: 'Telnet service port state'
+          type: SIMPLE
+          key: 'net.tcp.service[tcp,,{$HARES.TELNET.PORT}]'
+          history: 7d
+          valuemap:
+            name: 'Service state'
+          description: 'TCP connect to the Telnet port (1 = open = service enabled). The Zabbix server/proxy must be allowed to reach this port, otherwise a firewall drop looks like "disabled".'
+          tags:
+            - tag: component
+              value: security
+            - tag: application
+              value: telnet
+        - uuid: 'd72a20bcef8b415abb60866a206d1c73'
+          name: 'ONVIF service state'
+          type: HTTP_AGENT
+          key: hares.onvif.state
+          delay: 5m
+          history: 7d
+          url: 'http://{HOST.CONN}:{$HARES.ONVIF.PORT}{$HARES.ONVIF.PATH}'
+          timeout: 10s
+          request_method: POST
+          posts: '<?xml version="1.0" encoding="UTF-8"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"><s:Body><GetSystemDateAndTime xmlns="http://www.onvif.org/ver10/device/wsdl"/></s:Body></s:Envelope>'
+          headers:
+            - name: Content-Type
+              value: 'application/soap+xml; charset=utf-8'
+          status_codes: 200-599
+          valuemap:
+            name: 'Service state'
+          description: 'Sends an unauthenticated ONVIF GetSystemDateAndTime SOAP request. 1 = ONVIF answers (a response or an authorization fault), 0 = no ONVIF SOAP answer. Verify URL/port with curl first (see macros).'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var v = value || '';
+                  return /GetSystemDateAndTimeResponse|NotAuthorized|Unauthorized|onvif\.org/i.test(v) ? 1 : 0;
+          tags:
+            - tag: component
+              value: security
+            - tag: application
+              value: onvif
+      discovery_rules:
+        - uuid: '55fc55c769334323938f7489516e2dd3'
+          name: 'HDD discovery'
+          type: DEPENDENT
+          key: hares.disk.discovery
+          delay: '0'
+          lifetime: 7d
+          description: 'Discovers every "DiskID: N:" block found in OID 1.3.6.1.4.1.25506.20.3.0.'
+          item_prototypes:
+            - uuid: '3d1a442a9a394ed38d5ae745b7242f5b'
+              name: 'Disk {#DISKID}: total space'
+              type: DEPENDENT
+              key: 'hares.disk.space.total[{#DISKID}]'
+              delay: '0'
+              history: 31d
+              units: B
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'DiskID:\s*{#DISKID}:\s*Disk Space:\s*(\d+)'
+                    - \1
+                - type: MULTIPLIER
+                  parameters:
+                    - '{$HARES.DISK.UNIT.MULTIPLIER}'
+              master_item:
+                key: hares.disk.individual.raw
+              tags:
+                - tag: component
+                  value: storage
+                - tag: disk
+                  value: '{#DISKID}'
+            - uuid: '9ed3fc6a76864ffea4ad3fc9f00155a2'
+              name: 'Disk {#DISKID}: free space'
+              type: DEPENDENT
+              key: 'hares.disk.space.free[{#DISKID}]'
+              delay: '0'
+              history: 31d
+              units: B
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'DiskID:\s*{#DISKID}:\s*Disk Space:\s*\d+\(KB\)\s*Remaining Space:\s*(\d+)'
+                    - \1
+                - type: MULTIPLIER
+                  parameters:
+                    - '{$HARES.DISK.UNIT.MULTIPLIER}'
+              master_item:
+                key: hares.disk.individual.raw
+              tags:
+                - tag: component
+                  value: storage
+                - tag: disk
+                  value: '{#DISKID}'
+            - uuid: '86c05529ded54b2a8210feaa2894abed'
+              name: 'Disk {#DISKID}: used space'
+              type: CALCULATED
+              key: 'hares.disk.space.used[{#DISKID}]'
+              delay: 5m
+              history: 31d
+              units: B
+              params: 'last(//hares.disk.space.total[{#DISKID}])-last(//hares.disk.space.free[{#DISKID}])'
+              tags:
+                - tag: component
+                  value: storage
+                - tag: disk
+                  value: '{#DISKID}'
+            - uuid: 'd35ce3ae2dcb4a0cb3697e932b562100'
+              name: 'Disk {#DISKID}: used space, in %'
+              type: CALCULATED
+              key: 'hares.disk.space.pused[{#DISKID}]'
+              delay: 5m
+              history: 31d
+              value_type: FLOAT
+              units: '%'
+              params: '(last(//hares.disk.space.total[{#DISKID}])-last(//hares.disk.space.free[{#DISKID}]))/last(//hares.disk.space.total[{#DISKID}])*100'
+              tags:
+                - tag: component
+                  value: storage
+                - tag: disk
+                  value: '{#DISKID}'
+            - uuid: 'd05b88991599453f868b9286e9c3f359'
+              name: 'Disk {#DISKID}: status code'
+              type: DEPENDENT
+              key: 'hares.disk.status[{#DISKID}]'
+              delay: '0'
+              history: 31d
+              description: 'Vendor status code. A healthy disk was observed with value 3 (see macro {$HARES.DISK.STATUS.OK}).'
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'DiskID:\s*{#DISKID}:\s*Disk Space:\s*\d+\(KB\)\s*Remaining Space:\s*\d+\(KB\)\s*Status:\s*(\d+)'
+                    - \1
+              master_item:
+                key: hares.disk.individual.raw
+              tags:
+                - tag: component
+                  value: storage
+                - tag: disk
+                  value: '{#DISKID}'
+          trigger_prototypes:
+            - uuid: '2e3021ba83894632a49a2efcccb375ad'
+              expression: 'last(/HARES NVR-A64RH-16D by SNMP/hares.disk.status[{#DISKID}])<>{$HARES.DISK.STATUS.OK}'
+              name: 'Disk {#DISKID}: abnormal status'
+              priority: HIGH
+              description: 'Disk status code differs from the healthy value {$HARES.DISK.STATUS.OK}.'
+              dependencies:
+                - name: 'SNMP is not available'
+                  expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: '13d5eb1ed1db4e00818e41dd60e62330'
+              expression: 'min(/HARES NVR-A64RH-16D by SNMP/hares.disk.space.pused[{#DISKID}],10m)>{$HARES.DISK.PUSED.WARN}'
+              name: 'Disk {#DISKID}: space usage is high (>{$HARES.DISK.PUSED.WARN}%)'
+              priority: WARNING
+              description: 'NVRs normally run in overwrite (loop) mode and fill the disk by design. Raise {$HARES.DISK.PUSED.WARN} or use a host-level context if this is expected.'
+              dependencies:
+                - name: 'SNMP is not available'
+                  expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: capacity
+            - uuid: 'f280d6de0bbc4096a40d76873b0d8458'
+              expression: 'change(/HARES NVR-A64RH-16D by SNMP/hares.disk.status[{#DISKID}])<>0'
+              name: 'Disk {#DISKID}: status code changed (now {ITEM.VALUE})'
+              priority: WARNING
+              description: 'The volume status code changed. Record the new code together with the state shown on the NVR web panel to build the code table.'
+              manual_close: 'YES'
+              dependencies:
+                - name: 'SNMP is not available'
+                  expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: notice
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var re = /DiskID:\s*(\d+):/g;
+                  var out = [], seen = {}, m;
+                  while ((m = re.exec(value || '')) !== null) {
+                    if (!seen[m[1]]) { seen[m[1]] = 1; out.push({'{#DISKID}': m[1]}); }
+                  }
+                  return JSON.stringify(out);
+          master_item:
+            key: hares.disk.individual.raw
+        - uuid: '83bb429655c442c1b29f18c27d587865'
+          name: 'Camera (IPC) discovery'
+          type: DEPENDENT
+          key: hares.ipc.discovery
+          delay: '0'
+          lifetime: 7d
+          description: 'One entry per IPC.NO found in OID 1.3.6.1.4.1.25506.20.4.0.'
+          item_prototypes:
+            - uuid: 'd9a618b5792f4065babff33b435d23f1'
+              name: 'Camera {#IPCNO} ({#IPCNAME}): status'
+              type: DEPENDENT
+              key: 'hares.ipc.status[{#IPCNO}]'
+              delay: '0'
+              history: 31d
+              trends: '0'
+              value_type: CHAR
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'IPC\.NO:\s*{#IPCNO}\s+IPC\.Name:.*?IPC\.Status:\s*(\S+)'
+                    - \1
+              master_item:
+                key: hares.ipc.raw
+              tags:
+                - tag: component
+                  value: camera
+                - tag: camera
+                  value: '{#IPCNO}'
+            - uuid: 'c3928c94e39f4db9bd50dfba45cfd6e6'
+              name: 'Camera {#IPCNO} ({#IPCNAME}): online (1/0)'
+              type: DEPENDENT
+              key: 'hares.ipc.online[{#IPCNO}]'
+              delay: '0'
+              history: 31d
+              valuemap:
+                name: 'Service state'
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'IPC\.NO:\s*{#IPCNO}\s+IPC\.Name:.*?IPC\.Status:\s*(\S+)'
+                    - \1
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      return value.toUpperCase() === '{$HARES.IPC.STATUS.OK}'.toUpperCase() ? 1 : 0;
+              master_item:
+                key: hares.ipc.raw
+              tags:
+                - tag: component
+                  value: camera
+                - tag: camera
+                  value: '{#IPCNO}'
+            - uuid: 'aa11989940cd49479a318708a175ae35'
+              name: 'Camera {#IPCNO} ({#IPCNAME}): IP address'
+              type: DEPENDENT
+              key: 'hares.ipc.ip[{#IPCNO}]'
+              delay: '0'
+              history: 31d
+              trends: '0'
+              value_type: CHAR
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'IPC\.NO:\s*{#IPCNO}\s+IPC\.Name:.*?IPC\.IP:\s*(\S+)'
+                    - \1
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: hares.ipc.raw
+              tags:
+                - tag: component
+                  value: camera
+                - tag: camera
+                  value: '{#IPCNO}'
+            - uuid: 'd41afb0eb0ef44f5b9c88a9f1e50c8c1'
+              name: 'Camera {#IPCNO} ({#IPCNAME}): model'
+              type: DEPENDENT
+              key: 'hares.ipc.model[{#IPCNO}]'
+              delay: '0'
+              history: 31d
+              trends: '0'
+              value_type: CHAR
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'IPC\.NO:\s*{#IPCNO}\s+IPC\.Name:.*?IPC\.Model:\s*(\S+)'
+                    - \1
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: hares.ipc.raw
+              tags:
+                - tag: component
+                  value: camera
+                - tag: camera
+                  value: '{#IPCNO}'
+            - uuid: 'b5640c180d384cd3b26e471ca82285ba'
+              name: 'Camera {#IPCNO} ({#IPCNAME}): firmware'
+              type: DEPENDENT
+              key: 'hares.ipc.software[{#IPCNO}]'
+              delay: '0'
+              history: 31d
+              trends: '0'
+              value_type: CHAR
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'IPC\.NO:\s*{#IPCNO}\s+IPC\.Name:.*?IPC\.Software:\s*(\S+)'
+                    - \1
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: hares.ipc.raw
+              tags:
+                - tag: component
+                  value: camera
+                - tag: camera
+                  value: '{#IPCNO}'
+          trigger_prototypes:
+            - uuid: 'eb4cc504aebf4a908dae2830a83def9e'
+              expression: 'max(/HARES NVR-A64RH-16D by SNMP/hares.ipc.online[{#IPCNO}],#3)=0'
+              name: 'Camera {#IPCNO} ({#IPCNAME}, {#IPCIP}) is offline'
+              priority: AVERAGE
+              description: 'NVR reports IPC.Status different from {$HARES.IPC.STATUS.OK} for 3 consecutive polls.'
+              dependencies:
+                - name: 'SNMP is not available'
+                  expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var re = /IPC\.NO:\s*(\d+)\s+IPC\.Name:\s*(.*?)\s+IPC\.IP:\s*(\S+)/g;
+                  var out = [], m;
+                  while ((m = re.exec(value || '')) !== null) {
+                    out.push({'{#IPCNO}': m[1], '{#IPCNAME}': m[2], '{#IPCIP}': m[3]});
+                  }
+                  return JSON.stringify(out);
+          master_item:
+            key: hares.ipc.raw
+        - uuid: 'b00e42cc45f64ac89e63f242cf47cb31'
+          name: 'Channel discovery'
+          type: DEPENDENT
+          key: hares.channel.discovery
+          delay: '0'
+          lifetime: 7d
+          description: 'One entry per CHLID found in OID 1.3.6.1.4.1.25506.20.5.0.'
+          item_prototypes:
+            - uuid: 'fe0db404c0974926b5e168bee0155e84'
+              name: 'Channel {#CHLID}: encode type'
+              type: DEPENDENT
+              key: 'hares.channel.codec[{#CHLID}]'
+              delay: '0'
+              history: 31d
+              trends: '0'
+              value_type: CHAR
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'CHLID:\s*{#CHLID}\s+Encode Type:\s*(\S+)'
+                    - \1
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              master_item:
+                key: hares.channel.raw
+              tags:
+                - tag: component
+                  value: camera
+                - tag: channel
+                  value: '{#CHLID}'
+            - uuid: '44e6cb565f4243b4ac761b3695ca22a0'
+              name: 'Channel {#CHLID}: configured bit rate'
+              type: DEPENDENT
+              key: 'hares.channel.bitrate[{#CHLID}]'
+              delay: '0'
+              history: 31d
+              units: bps
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - 'CHLID:\s*{#CHLID}\s+Encode Type:\s*\S+\s+Bit Rate:\s*(\d+)'
+                    - \1
+                - type: MULTIPLIER
+                  parameters:
+                    - '1000'
+              master_item:
+                key: hares.channel.raw
+              tags:
+                - tag: component
+                  value: camera
+                - tag: channel
+                  value: '{#CHLID}'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var re = /CHLID:\s*(\d+)/g, out = [], m;
+                  while ((m = re.exec(value || '')) !== null) { out.push({'{#CHLID}': m[1]}); }
+                  return JSON.stringify(out);
+          master_item:
+            key: hares.channel.raw
+        - uuid: '8ebb40bd49244753a60cd2876bcf5873'
+          name: 'Network interface discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFNAME},1.3.6.1.2.1.31.1.1.1.1,{#IFDESCR},1.3.6.1.2.1.2.2.1.2,{#IFALIAS},1.3.6.1.2.1.31.1.1.1.18]'
+          key: hares.net.if.discovery
+          status: DISABLED
+          delay: 1h
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: '{#IFNAME}'
+                value: '{$HARES.NET.IF.NAME.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: A
+          lifetime: 7d
+          description: 'DISABLED: this NVR SNMP agent does not implement IF-MIB/ifXTable (verified by walk). Enable only if a firmware update adds it; otherwise monitor traffic on the switch port the NVR is connected to.'
+          item_prototypes:
+            - uuid: 'e07940cdd2a5427fb71f2e5805da8636'
+              name: 'Interface {#IFNAME}({#IFALIAS}): Operational status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+              key: 'net.if.status[ifOperStatus.{#SNMPINDEX}]'
+              delay: 1m
+              history: 7d
+              valuemap:
+                name: 'IF-MIB::ifOperStatus'
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: '6734bfdd26f14ec18beb640a051d1be4'
+              name: 'Interface {#IFNAME}({#IFALIAS}): Bits received'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.31.1.1.1.6.{#SNMPINDEX}'
+              key: 'net.if.in[ifHCInOctets.{#SNMPINDEX}]'
+              delay: 1m
+              history: 31d
+              units: bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: '873d6c5b7f92432c9032ee83cc1d2bef'
+              name: 'Interface {#IFNAME}({#IFALIAS}): Bits sent'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.31.1.1.1.10.{#SNMPINDEX}'
+              key: 'net.if.out[ifHCOutOctets.{#SNMPINDEX}]'
+              delay: 1m
+              history: 31d
+              units: bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: '52877d1caa264596941add9ac742806f'
+              name: 'Interface {#IFNAME}({#IFALIAS}): Inbound packets with errors'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}'
+              key: 'net.if.in.errors[ifInErrors.{#SNMPINDEX}]'
+              delay: 1m
+              history: 31d
+              units: pps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: '447cf7adaa2941a3837b6fae380eb91a'
+              name: 'Interface {#IFNAME}({#IFALIAS}): Outbound packets with errors'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}'
+              key: 'net.if.out.errors[ifOutErrors.{#SNMPINDEX}]'
+              delay: 1m
+              history: 31d
+              units: pps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+            - uuid: '6580e4f889ca4ff09e2b8a163d71db1a'
+              name: 'Interface {#IFNAME}({#IFALIAS}): Speed'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.31.1.1.1.15.{#SNMPINDEX}'
+              key: 'net.if.speed[ifHighSpeed.{#SNMPINDEX}]'
+              delay: 1h
+              history: 31d
+              units: bps
+              preprocessing:
+                - type: MULTIPLIER
+                  parameters:
+                    - '1000000'
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              tags:
+                - tag: component
+                  value: network
+                - tag: interface
+                  value: '{#IFNAME}'
+          trigger_prototypes:
+            - uuid: 'a401930120ab480895cda2085e4cba72'
+              expression: '{$HARES.IF.CONTROL:"{#IFNAME}"}=1 and last(/HARES NVR-A64RH-16D by SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])=2 and (last(/HARES NVR-A64RH-16D by SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#1)<>last(/HARES NVR-A64RH-16D by SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}],#2))'
+              recovery_mode: RECOVERY_EXPRESSION
+              recovery_expression: 'last(/HARES NVR-A64RH-16D by SNMP/net.if.status[ifOperStatus.{#SNMPINDEX}])<>2 or {$HARES.IF.CONTROL:"{#IFNAME}"}=0'
+              name: 'Interface {#IFNAME}({#IFALIAS}): Link down'
+              priority: AVERAGE
+              description: 'Set macro {$HARES.IF.CONTROL:"<ifname>"}=0 to disable this trigger for unused ports.'
+              manual_close: 'YES'
+              dependencies:
+                - name: 'SNMP is not available'
+                  expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: '68f6b10a9aac47c9bd67c26255fa9986'
+              expression: 'min(/HARES NVR-A64RH-16D by SNMP/net.if.in.errors[ifInErrors.{#SNMPINDEX}],5m)>0 or min(/HARES NVR-A64RH-16D by SNMP/net.if.out.errors[ifOutErrors.{#SNMPINDEX}],5m)>0'
+              name: 'Interface {#IFNAME}({#IFALIAS}): High error rate'
+              priority: WARNING
+              description: 'Packet errors were seen continuously for 5 minutes.'
+              dependencies:
+                - name: 'SNMP is not available'
+                  expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+              tags:
+                - tag: scope
+                  value: performance
+      tags:
+        - tag: class
+          value: hardware
+        - tag: target
+          value: nvr
+        - tag: vendor
+          value: hares
+      macros:
+        - macro: '{$HARES.CPU.UTIL.MAX}'
+          value: '90'
+          description: 'CPU utilization threshold, %'
+        - macro: '{$HARES.DISK.PUSED.WARN}'
+          value: '95'
+          description: 'Disk used-space threshold, % (NVR loop recording normally keeps disks near full)'
+        - macro: '{$HARES.DISK.STATUS.OK}'
+          value: '3'
+          description: 'Disk status code meaning healthy (observed: 3)'
+        - macro: '{$HARES.DISK.UNIT.MULTIPLIER}'
+          value: '1048576'
+          description: 'Bytes per unit of the disk capacity numbers reported by the NVR. Device labels them (KB) but the values are MB (verified: RAID6, 7 active x 8TB = ~36.3 TiB). 1048576 = MB, 1024 = KB.'
+        - macro: '{$HARES.HTTPS.PORT}'
+          value: '443'
+        - macro: '{$HARES.HTTPS.EXPECTED}'
+          value: '1'
+          description: 'Expected HTTPS state: 1 = enabled, 0 = disabled'
+        - macro: '{$HARES.ONVIF.EXPECTED}'
+          value: '1'
+          description: 'Expected ONVIF state: 1 = enabled, 0 = disabled'
+        - macro: '{$HARES.ONVIF.PATH}'
+          value: /onvif/device_service
+          description: 'ONVIF device service path (standard). Test: curl -i -X POST -H "Content-Type: application/soap+xml" --data "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\"><s:Body><GetSystemDateAndTime xmlns=\"http://www.onvif.org/ver10/device/wsdl\"/></s:Body></s:Envelope>" http://NVR-IP/onvif/device_service'
+        - macro: '{$HARES.ONVIF.PORT}'
+          value: '80'
+        - macro: '{$HARES.TELNET.EXPECTED}'
+          value: '0'
+          description: 'Expected Telnet state: 1 = enabled, 0 = disabled'
+        - macro: '{$HARES.TELNET.PORT}'
+          value: '23'
+        - macro: '{$HARES.IF.CONTROL}'
+          value: '1'
+          description: 'Link-down trigger control. Use {$HARES.IF.CONTROL:"<ifname>"}=0 to silence an interface.'
+        - macro: '{$HARES.IPC.EXPECTED}'
+          value: '1'
+          description: '1 = alert when no camera information is reported; 0 = disable'
+        - macro: '{$HARES.IPC.STATUS.OK}'
+          value: ONLINE
+          description: 'IPC.Status text meaning the camera is online (case-insensitive). Any other value counts as offline.'
+        - macro: '{$HARES.MEMORY.UTIL.MAX}'
+          value: '90'
+          description: 'Memory utilization threshold, %'
+        - macro: '{$HARES.NET.IF.NAME.NOT_MATCHES}'
+          value: '^(lo|Loopback.*|sit0|ip6tnl0)$'
+          description: 'Interfaces to exclude from discovery'
+        - macro: '{$HARES.NODATA}'
+          value: 30m
+        - macro: '{$HARES.RTSP.PORT}'
+          value: '554'
+        - macro: '{$HARES.UPTIME.MIN}'
+          value: 10m
+        - macro: '{$HARES.UPTIME.MULTIPLIER}'
+          value: '0.01'
+          description: 'Converts the vendor uptime value to seconds. Verified: the OID counts in units of 10 ms (100 per second) although labelled (ms).'
+        - macro: '{$HARES.WEB.PORT}'
+          value: '80'
+        - macro: '{$ICMP_LOSS_WARN}'
+          value: '20'
+        - macro: '{$ICMP_RESPONSE_TIME_WARN}'
+          value: '0.15'
+        - macro: '{$SNMP.TIMEOUT}'
+          value: 5m
+      valuemaps:
+        - uuid: '4d622ea05b434e50a749e31aa68690a7'
+          name: 'IF-MIB::ifOperStatus'
+          mappings:
+            - value: '1'
+              newvalue: up
+            - value: '2'
+              newvalue: down
+            - value: '3'
+              newvalue: testing
+            - value: '4'
+              newvalue: unknown
+            - value: '5'
+              newvalue: dormant
+            - value: '6'
+              newvalue: notPresent
+            - value: '7'
+              newvalue: lowerLayerDown
+        - uuid: '615ed1a50525473d8f9aa59c3a3f0831'
+          name: 'Service state'
+          mappings:
+            - value: '0'
+              newvalue: Down
+            - value: '1'
+              newvalue: Up
+        - uuid: 'b7f376fc70404b7fa68e40172b433e4e'
+          name: zabbix.host.available
+          mappings:
+            - value: '0'
+              newvalue: 'Not available'
+            - value: '1'
+              newvalue: Available
+            - value: '2'
+              newvalue: Unknown
+  triggers:
+    - uuid: 'a3633d02962845dd983beddfb5ec7ade'
+      expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+      name: 'SNMP is not available'
+      priority: AVERAGE
+      description: 'SNMP agent of the NVR has not responded for {$SNMP.TIMEOUT}. Check SNMP is enabled on the NVR, community/credentials, UDP 161 reachability.'
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: '5803042119d3402e8a29a1c491e24c74'
+      expression: 'max(/HARES NVR-A64RH-16D by SNMP/icmpping,#3)=0'
+      name: 'Unavailable by ICMP ping'
+      priority: HIGH
+      description: 'NVR is not reachable by ICMP for 3 consecutive checks.'
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: 'e4e3b20fb5114b689ea0c1795def3622'
+      expression: 'min(/HARES NVR-A64RH-16D by SNMP/icmppingloss,5m)>{$ICMP_LOSS_WARN} and min(/HARES NVR-A64RH-16D by SNMP/icmppingloss,5m)<100'
+      name: 'High ICMP ping loss'
+      priority: WARNING
+      dependencies:
+        - name: 'Unavailable by ICMP ping'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/icmpping,#3)=0'
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: '20987b8cc9d8416eaefae750599c6865'
+      expression: 'avg(/HARES NVR-A64RH-16D by SNMP/icmppingsec,5m)>{$ICMP_RESPONSE_TIME_WARN}'
+      name: 'High ICMP ping response time'
+      priority: WARNING
+      dependencies:
+        - name: 'Unavailable by ICMP ping'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/icmpping,#3)=0'
+      tags:
+        - tag: scope
+          value: performance
+    - uuid: '3d0a451db16f444fa11497d69853c053'
+      expression: 'max(/HARES NVR-A64RH-16D by SNMP/net.tcp.service[tcp,,{$HARES.WEB.PORT}],#3)=0'
+      name: 'Web service (HTTP) is unavailable'
+      priority: AVERAGE
+      description: 'NVR web interface does not answer on TCP port {$HARES.WEB.PORT}.'
+      dependencies:
+        - name: 'Unavailable by ICMP ping'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/icmpping,#3)=0'
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: '6dcfd9135db541c0ba5eaea573f64c0d'
+      expression: 'count(/HARES NVR-A64RH-16D by SNMP/net.tcp.service[tcp,,{$HARES.HTTPS.PORT}],#3,"ne",{$HARES.HTTPS.EXPECTED})=3'
+      name: 'HTTPS service state differs from expected (expected: {$HARES.HTTPS.EXPECTED}, 1=enabled 0=disabled)'
+      priority: WARNING
+      description: 'Port {$HARES.HTTPS.PORT} has been in the opposite state of {$HARES.HTTPS.EXPECTED} for 3 polls.'
+      dependencies:
+        - name: 'Unavailable by ICMP ping'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/icmpping,#3)=0'
+      tags:
+        - tag: scope
+          value: security
+    - uuid: '4df43d95aa0d4b2493fc9ad85b451e6e'
+      expression: 'max(/HARES NVR-A64RH-16D by SNMP/net.tcp.service[tcp,,{$HARES.RTSP.PORT}],#3)=0'
+      name: 'RTSP service is unavailable'
+      priority: WARNING
+      description: 'RTSP port {$HARES.RTSP.PORT} does not answer; live streaming to clients may be affected.'
+      dependencies:
+        - name: 'Unavailable by ICMP ping'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/icmpping,#3)=0'
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: 'ae24ef2e83b645cca609d3663481ce17'
+      expression: 'nodata(/HARES NVR-A64RH-16D by SNMP/hares.cpu.util,{$HARES.NODATA})=1'
+      name: 'No data from NVR enterprise OID (1.3.6.1.4.1.25506.20)'
+      priority: AVERAGE
+      description: 'SNMP may answer but the vendor subtree returns nothing / unparsable data for {$HARES.NODATA}.'
+      dependencies:
+        - name: 'SNMP is not available'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: '436d8f71d0e3466981d1f04e6993bfaa'
+      expression: 'min(/HARES NVR-A64RH-16D by SNMP/hares.cpu.util,5m)>{$HARES.CPU.UTIL.MAX}'
+      name: 'High CPU utilization (over {$HARES.CPU.UTIL.MAX}% for 5m)'
+      priority: WARNING
+      dependencies:
+        - name: 'SNMP is not available'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+      tags:
+        - tag: scope
+          value: performance
+    - uuid: 'a1738817e8df42409ad104ffaaf01f3d'
+      expression: 'min(/HARES NVR-A64RH-16D by SNMP/hares.mem.util,5m)>{$HARES.MEMORY.UTIL.MAX}'
+      name: 'High memory utilization (over {$HARES.MEMORY.UTIL.MAX}% for 5m)'
+      priority: WARNING
+      dependencies:
+        - name: 'SNMP is not available'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+      tags:
+        - tag: scope
+          value: performance
+    - uuid: 'cabfcf921b8b44ec88deb133ab98aa01'
+      expression: 'last(/HARES NVR-A64RH-16D by SNMP/hares.uptime)<{$HARES.UPTIME.MIN}'
+      name: 'NVR has been restarted (uptime < {$HARES.UPTIME.MIN})'
+      priority: INFO
+      manual_close: 'YES'
+      dependencies:
+        - name: 'SNMP is not available'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+      tags:
+        - tag: scope
+          value: notice
+    - uuid: 'cef3e57a5dd040cc97ac0f1b747ca83f'
+      expression: 'change(/HARES NVR-A64RH-16D by SNMP/hares.dev.firmware)=1 and length(last(/HARES NVR-A64RH-16D by SNMP/hares.dev.firmware))>0'
+      name: 'Firmware version has changed'
+      priority: INFO
+      manual_close: 'YES'
+      tags:
+        - tag: scope
+          value: notice
+    - uuid: 'a9551a3e7dc6464b867377d846e0e43b'
+      expression: 'last(/HARES NVR-A64RH-16D by SNMP/hares.disk.count)=0'
+      name: 'No HDD detected in the NVR'
+      priority: HIGH
+      description: 'DiskTotalNum reported 0: recording is not possible.'
+      dependencies:
+        - name: 'SNMP is not available'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: '1bcb05f035c641209387c2f0d3d2498f'
+      expression: 'last(/HARES NVR-A64RH-16D by SNMP/hares.ipc.offline.count)>0'
+      name: 'One or more cameras are offline'
+      priority: WARNING
+      description: 'At least one camera reports an IPC.Status different from {$HARES.IPC.STATUS.OK}.'
+      dependencies:
+        - name: 'SNMP is not available'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: '25791405c80243b88874586a9483407c'
+      expression: 'last(/HARES NVR-A64RH-16D by SNMP/hares.ipc.length)=0 and {$HARES.IPC.EXPECTED}=1'
+      name: 'No camera information reported by NVR'
+      priority: WARNING
+      description: 'IPC info string is empty: no cameras connected, or all removed. Set macro {$HARES.IPC.EXPECTED}=0 on hosts without cameras.'
+      dependencies:
+        - name: 'SNMP is not available'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/zabbix[host,snmp,available],{$SNMP.TIMEOUT})=0'
+      tags:
+        - tag: scope
+          value: availability
+    - uuid: 'cd36198574e245ef80882845a0b98c85'
+      expression: 'change(/HARES NVR-A64RH-16D by SNMP/hares.ipc.total)<>0'
+      name: 'Number of cameras changed'
+      priority: INFO
+      manual_close: 'YES'
+      tags:
+        - tag: scope
+          value: notice
+    - uuid: 'd375e530ff414297952812c1177e5c0b'
+      expression: 'count(/HARES NVR-A64RH-16D by SNMP/net.tcp.service[tcp,,{$HARES.TELNET.PORT}],#3,"ne",{$HARES.TELNET.EXPECTED})=3'
+      name: 'Telnet service state differs from expected (expected: {$HARES.TELNET.EXPECTED}, 1=enabled 0=disabled)'
+      priority: AVERAGE
+      description: 'Telnet port {$HARES.TELNET.PORT} state differs from {$HARES.TELNET.EXPECTED}. Telnet should normally be disabled.'
+      dependencies:
+        - name: 'Unavailable by ICMP ping'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/icmpping,#3)=0'
+      tags:
+        - tag: scope
+          value: security
+    - uuid: 'a0fc0c6369f44a1f96081356646d73bf'
+      expression: 'count(/HARES NVR-A64RH-16D by SNMP/hares.onvif.state,#3,"ne",{$HARES.ONVIF.EXPECTED})=3'
+      name: 'ONVIF service state differs from expected (expected: {$HARES.ONVIF.EXPECTED}, 1=enabled 0=disabled)'
+      priority: WARNING
+      description: 'ONVIF SOAP probe result differs from {$HARES.ONVIF.EXPECTED} for 3 polls.'
+      dependencies:
+        - name: 'Unavailable by ICMP ping'
+          expression: 'max(/HARES NVR-A64RH-16D by SNMP/icmpping,#3)=0'
+      tags:
+        - tag: scope
+          value: security
