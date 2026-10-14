@@ -20,6 +20,11 @@ zabbix_export:
          - IF-MIB, sysUpTime and HOST-RESOURCES-MIB are NOT implemented: interface discovery is disabled by default.
          - HTTPS / Telnet / ONVIF are probed from the Zabbix side (port connect / SOAP request) and compared with *.EXPECTED macros. IP filtering, 802.1x and ARP protection are NOT observable externally.
          - Cameras (IPC.NO / IPC.Status) and channels (CHLID / bit rate) are discovered automatically.
+
+        By Mahdi Alipour
+        Email : Alipour@live.com
+        Github: https://github.com/mahdi-alipour/Zabbix-Template-for-HARES-NVR-
+         
       groups:
         - name: 'Templates/Network devices'
       items:
